@@ -1,126 +1,126 @@
 import java.util.*;
 
-class TrieNode {
-    Map<Character, TrieNode> children = new HashMap<>();
-    boolean isEnd = false;
-}
+class ParkingSpot {
 
-class Query {
-    String text;
-    int frequency;
+    String licensePlate;
+    long entryTime;
+    boolean occupied;
 
-    public Query(String text, int frequency) {
-        this.text = text;
-        this.frequency = frequency;
+    public ParkingSpot() {
+        this.occupied = false;
     }
 }
 
 public class week12 {
 
-    private TrieNode root = new TrieNode();
+    private ParkingSpot[] table;
+    private int capacity;
+    private int occupiedCount = 0;
+    private int totalProbes = 0;
+    private int totalParks = 0;
 
-    // query → frequency
-    private HashMap<String, Integer> frequencyMap = new HashMap<>();
+    public week12(int capacity) {
+        this.capacity = capacity;
+        table = new ParkingSpot[capacity];
 
-    // insert query into trie
-    private void insertQuery(String query) {
-
-        TrieNode node = root;
-
-        for (char c : query.toCharArray()) {
-            node.children.putIfAbsent(c, new TrieNode());
-            node = node.children.get(c);
-        }
-
-        node.isEnd = true;
-    }
-
-    // update frequency
-    public void updateFrequency(String query) {
-
-        int freq = frequencyMap.getOrDefault(query, 0) + 1;
-        frequencyMap.put(query, freq);
-
-        insertQuery(query);
-    }
-
-    // collect queries starting with prefix
-    private void dfs(TrieNode node, String prefix, List<String> results) {
-
-        if (node.isEnd) {
-            results.add(prefix);
-        }
-
-        for (char c : node.children.keySet()) {
-            dfs(node.children.get(c), prefix + c, results);
+        for (int i = 0; i < capacity; i++) {
+            table[i] = new ParkingSpot();
         }
     }
 
-    // search suggestions
-    public List<Query> search(String prefix) {
+    // Hash function
+    private int hash(String licensePlate) {
+        return Math.abs(licensePlate.hashCode()) % capacity;
+    }
 
-        TrieNode node = root;
+    // Park vehicle
+    public void parkVehicle(String licensePlate) {
 
-        for (char c : prefix.toCharArray()) {
+        int index = hash(licensePlate);
+        int probes = 0;
 
-            if (!node.children.containsKey(c)) {
-                return new ArrayList<>();
+        while (table[index].occupied) {
+            index = (index + 1) % capacity; // linear probing
+            probes++;
+        }
+
+        table[index].licensePlate = licensePlate;
+        table[index].entryTime = System.currentTimeMillis();
+        table[index].occupied = true;
+
+        occupiedCount++;
+        totalProbes += probes;
+        totalParks++;
+
+        System.out.println("Vehicle " + licensePlate +
+                " assigned spot #" + index +
+                " (" + probes + " probes)");
+    }
+
+    // Exit vehicle
+    public void exitVehicle(String licensePlate) {
+
+        int index = hash(licensePlate);
+
+        while (table[index].occupied) {
+
+            if (licensePlate.equals(table[index].licensePlate)) {
+
+                long exitTime = System.currentTimeMillis();
+
+                long durationMillis = exitTime - table[index].entryTime;
+
+                double hours = durationMillis / (1000.0 * 60 * 60);
+
+                double fee = hours * 5; // $5 per hour
+
+                table[index].occupied = false;
+                table[index].licensePlate = null;
+
+                occupiedCount--;
+
+                System.out.println("Spot #" + index + " freed");
+                System.out.println("Duration: "
+                        + String.format("%.2f", hours) + " hours");
+                System.out.println("Fee: $" + String.format("%.2f", fee));
+
+                return;
             }
 
-            node = node.children.get(c);
+            index = (index + 1) % capacity;
         }
 
-        List<String> matches = new ArrayList<>();
-        dfs(node, prefix, matches);
-
-        // min-heap for top 10
-        PriorityQueue<Query> pq =
-                new PriorityQueue<>(Comparator.comparingInt(q -> q.frequency));
-
-        for (String query : matches) {
-
-            int freq = frequencyMap.get(query);
-
-            pq.offer(new Query(query, freq));
-
-            if (pq.size() > 10) {
-                pq.poll();
-            }
-        }
-
-        List<Query> result = new ArrayList<>(pq);
-        result.sort((a, b) -> b.frequency - a.frequency);
-
-        return result;
+        System.out.println("Vehicle not found");
     }
 
-    public static void main(String[] args) {
+    // Parking statistics
+    public void getStatistics() {
 
-        week12 system = new week12();
+        double occupancy =
+                (occupiedCount * 100.0) / capacity;
 
-        // simulate previous search history
-        system.updateFrequency("java tutorial");
-        system.updateFrequency("javascript");
-        system.updateFrequency("java download");
-        system.updateFrequency("java tutorial");
-        system.updateFrequency("java tutorial");
-        system.updateFrequency("java 21 features");
+        double avgProbes =
+                totalParks == 0 ? 0 : (double) totalProbes / totalParks;
 
-        List<Query> suggestions = system.search("jav");
+        System.out.println("Occupancy: "
+                + String.format("%.2f", occupancy) + "%");
 
-        int rank = 1;
+        System.out.println("Average Probes: "
+                + String.format("%.2f", avgProbes));
+    }
 
-        for (Query q : suggestions) {
+    public static void main(String[] args) throws InterruptedException {
 
-            System.out.println(rank + ". " + q.text +
-                    " (" + q.frequency + " searches)");
+        week12 lot = new week12(500);
 
-            rank++;
-        }
+        lot.parkVehicle("ABC-1234");
+        lot.parkVehicle("ABC-1235");
+        lot.parkVehicle("XYZ-9999");
 
-        // update frequency after new search
-        system.updateFrequency("java 21 features");
+        Thread.sleep(2000); // simulate parking duration
 
-        System.out.println("\nUpdated frequency for 'java 21 features'");
+        lot.exitVehicle("ABC-1234");
+
+        lot.getStatistics();
     }
 }
