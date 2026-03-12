@@ -1,112 +1,122 @@
 import java.util.*;
 
-class DNSEntry {
-    String domain;
-    String ipAddress;
-    long expiryTime;
-
-    public DNSEntry(String domain, String ipAddress, long ttlSeconds) {
-        this.domain = domain;
-        this.ipAddress = ipAddress;
-        this.expiryTime = System.currentTimeMillis() + (ttlSeconds * 1000);
-    }
-
-    public boolean isExpired() {
-        return System.currentTimeMillis() > expiryTime;
-    }
-}
-
 public class week12 {
 
-    private int capacity;
-    private LinkedHashMap<String, DNSEntry> cache;
-    private int hits = 0;
-    private int misses = 0;
+    // n-gram → set of document IDs
+    private HashMap<String, Set<String>> ngramIndex;
 
-    public week12(int capacity) {
-        this.capacity = capacity;
+    // documentId → total number of ngrams
+    private HashMap<String, Integer> documentNgramCount;
 
-        // accessOrder = true → enables LRU behavior
-        cache = new LinkedHashMap<String, DNSEntry>(capacity, 0.75f, true) {
-            protected boolean removeEldestEntry(Map.Entry<String, DNSEntry> eldest) {
-                return size() > week12.this.capacity;
-            }
-        };
+    private int N = 5; // size of n-gram (5 words)
+
+    public week12() {
+        ngramIndex = new HashMap<>();
+        documentNgramCount = new HashMap<>();
     }
 
-    // Simulate upstream DNS lookup
-    private String queryUpstreamDNS(String domain) {
-        // Fake IP generation for demo
-        return "172.217." + new Random().nextInt(100) + "." + new Random().nextInt(255);
+    // Break text into words
+    private List<String> tokenize(String text) {
+        return Arrays.asList(text.toLowerCase().split("\\s+"));
     }
 
-    public String resolve(String domain) {
+    // Generate n-grams
+    private List<String> generateNGrams(List<String> words) {
 
-        if (cache.containsKey(domain)) {
+        List<String> ngrams = new ArrayList<>();
 
-            DNSEntry entry = cache.get(domain);
+        for (int i = 0; i <= words.size() - N; i++) {
 
-            if (!entry.isExpired()) {
-                hits++;
-                System.out.println("Cache HIT → " + entry.ipAddress);
-                return entry.ipAddress;
+            StringBuilder gram = new StringBuilder();
+
+            for (int j = 0; j < N; j++) {
+                gram.append(words.get(i + j)).append(" ");
             }
 
-            // expired
-            cache.remove(domain);
-            System.out.println("Cache EXPIRED");
+            ngrams.add(gram.toString().trim());
         }
 
-        // cache miss
-        misses++;
-
-        String ip = queryUpstreamDNS(domain);
-
-        // TTL = 300 seconds
-        DNSEntry entry = new DNSEntry(domain, ip, 300);
-
-        cache.put(domain, entry);
-
-        System.out.println("Cache MISS → Query upstream → " + ip);
-
-        return ip;
+        return ngrams;
     }
 
-    public void removeExpiredEntries() {
+    // Add a document to database
+    public void addDocument(String documentId, String content) {
 
-        Iterator<Map.Entry<String, DNSEntry>> iterator = cache.entrySet().iterator();
+        List<String> words = tokenize(content);
+        List<String> ngrams = generateNGrams(words);
 
-        while (iterator.hasNext()) {
+        documentNgramCount.put(documentId, ngrams.size());
 
-            Map.Entry<String, DNSEntry> entry = iterator.next();
+        for (String gram : ngrams) {
 
-            if (entry.getValue().isExpired()) {
-                iterator.remove();
-            }
+            ngramIndex.putIfAbsent(gram, new HashSet<>());
+
+            ngramIndex.get(gram).add(documentId);
         }
     }
 
-    public void getCacheStats() {
+    // Analyze new document for plagiarism
+    public void analyzeDocument(String documentId, String content) {
 
-        int total = hits + misses;
+        List<String> words = tokenize(content);
+        List<String> ngrams = generateNGrams(words);
 
-        double hitRate = total == 0 ? 0 : (hits * 100.0 / total);
+        HashMap<String, Integer> matchCount = new HashMap<>();
 
-        System.out.println("Cache Hits: " + hits);
-        System.out.println("Cache Misses: " + misses);
-        System.out.println("Hit Rate: " + hitRate + "%");
+        for (String gram : ngrams) {
+
+            if (ngramIndex.containsKey(gram)) {
+
+                for (String doc : ngramIndex.get(gram)) {
+
+                    matchCount.put(doc, matchCount.getOrDefault(doc, 0) + 1);
+                }
+            }
+        }
+
+        System.out.println("Extracted " + ngrams.size() + " n-grams");
+
+        for (String doc : matchCount.keySet()) {
+
+            int matches = matchCount.get(doc);
+            int total = documentNgramCount.get(doc);
+
+            double similarity = (matches * 100.0) / total;
+
+            System.out.println("Found " + matches +
+                    " matching n-grams with \"" + doc + "\"");
+
+            System.out.println("Similarity: " +
+                    String.format("%.2f", similarity) + "%");
+
+            if (similarity > 50) {
+                System.out.println("PLAGIARISM DETECTED\n");
+            } else if (similarity > 10) {
+                System.out.println("Suspicious similarity\n");
+            }
+        }
     }
 
     public static void main(String[] args) {
 
-        week12 dnsCache = new week12(5);
+         week12 detector = new week12();
 
-        dnsCache.resolve("google.com");
-        dnsCache.resolve("google.com");
+        String essay1 = "Artificial intelligence is transforming the world "
+                + "by enabling machines to learn from data and improve over time";
 
-        dnsCache.resolve("github.com");
-        dnsCache.resolve("stackoverflow.com");
+        String essay2 = "Artificial intelligence is transforming the world "
+                + "by enabling machines to learn from data and improve quickly";
 
-        dnsCache.getCacheStats();
+        String essay3 = "Climate change is a serious global challenge "
+                + "affecting ecosystems and human life";
+
+        detector.addDocument("essay_089.txt", essay1);
+        detector.addDocument("essay_092.txt", essay2);
+        detector.addDocument("essay_050.txt", essay3);
+
+        String newEssay = "Artificial intelligence is transforming the world "
+                + "by enabling machines to learn from data and improve over time";
+
+        detector.analyzeDocument("essay_123.txt", newEssay);
     }
 }
