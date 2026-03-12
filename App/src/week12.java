@@ -1,122 +1,122 @@
 import java.util.*;
 
+class PageEvent {
+    String url;
+    String userId;
+    String source;
+
+    public PageEvent(String url, String userId, String source) {
+        this.url = url;
+        this.userId = userId;
+        this.source = source;
+    }
+}
+
 public class week12 {
 
-    // n-gram → set of document IDs
-    private HashMap<String, Set<String>> ngramIndex;
+    // pageUrl → visit count
+    private HashMap<String, Integer> pageViews = new HashMap<>();
 
-    // documentId → total number of ngrams
-    private HashMap<String, Integer> documentNgramCount;
+    // pageUrl → unique visitors
+    private HashMap<String, Set<String>> uniqueVisitors = new HashMap<>();
 
-    private int N = 5; // size of n-gram (5 words)
+    // traffic source → count
+    private HashMap<String, Integer> trafficSources = new HashMap<>();
 
-    public week12() {
-        ngramIndex = new HashMap<>();
-        documentNgramCount = new HashMap<>();
+    // Process incoming event
+    public void processEvent(PageEvent event) {
+
+        // Update page views
+        pageViews.put(event.url, pageViews.getOrDefault(event.url, 0) + 1);
+
+        // Update unique visitors
+        uniqueVisitors.putIfAbsent(event.url, new HashSet<>());
+        uniqueVisitors.get(event.url).add(event.userId);
+
+        // Update traffic sources
+        trafficSources.put(event.source,
+                trafficSources.getOrDefault(event.source, 0) + 1);
     }
 
-    // Break text into words
-    private List<String> tokenize(String text) {
-        return Arrays.asList(text.toLowerCase().split("\\s+"));
-    }
+    // Get Top 10 pages
+    private List<Map.Entry<String, Integer>> getTopPages() {
 
-    // Generate n-grams
-    private List<String> generateNGrams(List<String> words) {
+        PriorityQueue<Map.Entry<String, Integer>> pq =
+                new PriorityQueue<>(Map.Entry.comparingByValue());
 
-        List<String> ngrams = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : pageViews.entrySet()) {
 
-        for (int i = 0; i <= words.size() - N; i++) {
+            pq.offer(entry);
 
-            StringBuilder gram = new StringBuilder();
-
-            for (int j = 0; j < N; j++) {
-                gram.append(words.get(i + j)).append(" ");
-            }
-
-            ngrams.add(gram.toString().trim());
-        }
-
-        return ngrams;
-    }
-
-    // Add a document to database
-    public void addDocument(String documentId, String content) {
-
-        List<String> words = tokenize(content);
-        List<String> ngrams = generateNGrams(words);
-
-        documentNgramCount.put(documentId, ngrams.size());
-
-        for (String gram : ngrams) {
-
-            ngramIndex.putIfAbsent(gram, new HashSet<>());
-
-            ngramIndex.get(gram).add(documentId);
-        }
-    }
-
-    // Analyze new document for plagiarism
-    public void analyzeDocument(String documentId, String content) {
-
-        List<String> words = tokenize(content);
-        List<String> ngrams = generateNGrams(words);
-
-        HashMap<String, Integer> matchCount = new HashMap<>();
-
-        for (String gram : ngrams) {
-
-            if (ngramIndex.containsKey(gram)) {
-
-                for (String doc : ngramIndex.get(gram)) {
-
-                    matchCount.put(doc, matchCount.getOrDefault(doc, 0) + 1);
-                }
+            if (pq.size() > 10) {
+                pq.poll();
             }
         }
 
-        System.out.println("Extracted " + ngrams.size() + " n-grams");
+        List<Map.Entry<String, Integer>> result = new ArrayList<>(pq);
+        result.sort((a, b) -> b.getValue() - a.getValue());
 
-        for (String doc : matchCount.keySet()) {
+        return result;
+    }
 
-            int matches = matchCount.get(doc);
-            int total = documentNgramCount.get(doc);
+    // Display dashboard
+    public void getDashboard() {
 
-            double similarity = (matches * 100.0) / total;
+        System.out.println("Top Pages:");
 
-            System.out.println("Found " + matches +
-                    " matching n-grams with \"" + doc + "\"");
+        List<Map.Entry<String, Integer>> topPages = getTopPages();
 
-            System.out.println("Similarity: " +
-                    String.format("%.2f", similarity) + "%");
+        int rank = 1;
 
-            if (similarity > 50) {
-                System.out.println("PLAGIARISM DETECTED\n");
-            } else if (similarity > 10) {
-                System.out.println("Suspicious similarity\n");
-            }
+        for (Map.Entry<String, Integer> page : topPages) {
+
+            int unique = uniqueVisitors.get(page.getKey()).size();
+
+            System.out.println(rank + ". " + page.getKey()
+                    + " - " + page.getValue() + " views ("
+                    + unique + " unique)");
+
+            rank++;
+        }
+
+        System.out.println("\nTraffic Sources:");
+
+        int total = 0;
+
+        for (int count : trafficSources.values()) {
+            total += count;
+        }
+
+        for (String source : trafficSources.keySet()) {
+
+            double percent =
+                    (trafficSources.get(source) * 100.0) / total;
+
+            System.out.println(source + ": "
+                    + String.format("%.1f", percent) + "%");
         }
     }
 
     public static void main(String[] args) {
 
-         week12 detector = new week12();
+        week12 analytics = new week12();
 
-        String essay1 = "Artificial intelligence is transforming the world "
-                + "by enabling machines to learn from data and improve over time";
+        // Simulated events
+        analytics.processEvent(new PageEvent("/article/breaking-news",
+                "user_123", "google"));
 
-        String essay2 = "Artificial intelligence is transforming the world "
-                + "by enabling machines to learn from data and improve quickly";
+        analytics.processEvent(new PageEvent("/article/breaking-news",
+                "user_456", "facebook"));
 
-        String essay3 = "Climate change is a serious global challenge "
-                + "affecting ecosystems and human life";
+        analytics.processEvent(new PageEvent("/sports/championship",
+                "user_789", "google"));
 
-        detector.addDocument("essay_089.txt", essay1);
-        detector.addDocument("essay_092.txt", essay2);
-        detector.addDocument("essay_050.txt", essay3);
+        analytics.processEvent(new PageEvent("/sports/championship",
+                "user_101", "direct"));
 
-        String newEssay = "Artificial intelligence is transforming the world "
-                + "by enabling machines to learn from data and improve over time";
+        analytics.processEvent(new PageEvent("/sports/championship",
+                "user_789", "google"));
 
-        detector.analyzeDocument("essay_123.txt", newEssay);
+        analytics.getDashboard();
     }
 }
